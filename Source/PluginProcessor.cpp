@@ -5,7 +5,7 @@ namespace {
 float coeff(float seconds,double sr){return std::exp(-1.0f/juce::jmax(1.0f,seconds*(float)sr));}
 float pole(float hz,double sr){return std::exp(-2.0f*juce::MathConstants<float>::pi*hz/(float)sr);}
 float db(float d){return juce::Decibels::decibelsToGain(d);}
-float gainCurve(float envelope,float strength,bool expansion){
+float gainCurve(float envelope,float strength,bool expansion,float expansionScale){
  // Complementary 2:1 compressor and 1:2 expander at 100% strength,
  // referenced to -18 dBFS. Protect low-level signals from extreme gain.
  const float level=juce::Decibels::gainToDecibels(juce::jmax(1e-5f,envelope),-100.0f);
@@ -14,7 +14,7 @@ float gainCurve(float envelope,float strength,bool expansion){
  const float difference=juce::jlimit(-24.0f,18.0f,level+18.0f);
  // A 2:1 encoder needs a 1:2 decoder: expander slope is +1,
  // not +0.5. This was a major source of tracking error.
- const float target=(expansion?1.0f:-0.5f)*strength*difference;
+ const float target=(expansion?expansionScale:-0.5f)*strength*difference;
  return db(juce::jlimit(-12.0f,12.0f,target));
 }
 }
@@ -54,6 +54,8 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const bool expander=*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=*parameters.getRawParameterValue("bandwidth")>.5f;
  const bool liftHighOnly=(lowLevelMode||combinedMode)&&*parameters.getRawParameterValue("liftHighOnly")>.5f;
+ // Shared decoder restoration control for all four compander models.
+ // At 0% retain original decoding; at 100% suppress dynamic expansion.
  const float expansionScale=1.f-juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("expansionReduction")*.01f);
  const float liftSplitPole=pole(5000.f,sampleRate);
  const float a1=pole(split*.48f,sampleRate),a2=pole(split*2.4f,sampleRate);
@@ -118,7 +120,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
      auto& env=encode?s[0].envEncode:s[0].envDecode;
      float v=std::abs(value),k=v>env?attack:release;
      env=k*env+(1-k)*v;
-     return value*gainCurve(env,juce::jmin(1.0f,amount),!encode);
+     return value*gainCurve(env,juce::jmin(1.0f,amount),!encode,expansionScale);
     }
     const float parts[3]={low1,low2-low1,value-low2};
     float result=0;
@@ -128,7 +130,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
      float k=level>env?attack:release;
      env=k*env+(1-k)*level;
      float strength=juce::jmin(1.0f,amount*weights[band]);
-     result+=parts[band]*gainCurve(env,strength,!encode);
+     result+=parts[band]*gainCurve(env,strength,!encode,expansionScale);
     }
     return result;
    };
