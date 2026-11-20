@@ -27,12 +27,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<F>(juce::ParameterID{"emphasis",1},"HF Emphasis (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"sheen",1},"Sheen (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"split",1},"Frequency Split (Hz)",juce::NormalisableRange<float>(250,5000,1,.4f),1300));
- p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband","Low-Level Lift / Restore","DMM + Low-Level Lift"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband","Low-Level Lift / Restore","DMM + Low-Level Lift","Simple / DMM + Lift"},0));
  p.add(std::make_unique<B>(juce::ParameterID{"compress",1},"Compressor On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"expand",1},"Expander On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"bandwidth",1},"BBD Bandwidth",false));
  p.add(std::make_unique<B>(juce::ParameterID{"liftHighOnly",1},"Lift High Frequencies Only (5 kHz)",false));
  p.add(std::make_unique<F>(juce::ParameterID{"expansionReduction",1},"Reduce Expansion (%)",juce::NormalisableRange<float>(0,100,.1f),0));
+ p.add(std::make_unique<F>(juce::ParameterID{"simpleHigh",1},"High End (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  return p;
 }
 CompanderProcessor::CompanderProcessor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),parameters(*this,nullptr,"STATE",layout()){}
@@ -43,21 +44,30 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float input=db(*parameters.getRawParameterValue("input"));
  const float output=db(*parameters.getRawParameterValue("output"));
  const float amount=*parameters.getRawParameterValue("amount")*.01f;
- const float emphasis=*parameters.getRawParameterValue("emphasis")*.01f;
- const float sheen=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("sheen")*.01f);
- const float split=*parameters.getRawParameterValue("split");
- const int mode=juce::jlimit(0,3,(int)*parameters.getRawParameterValue("mode"));
- const bool dmm=mode==0||mode==3;
+ const float rawEmphasis=*parameters.getRawParameterValue("emphasis")*.01f;
+ const float rawSheen=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("sheen")*.01f);
+ const float rawSplit=*parameters.getRawParameterValue("split");
+ const int mode=juce::jlimit(0,4,(int)*parameters.getRawParameterValue("mode"));
+ const bool simpleMode=mode==4;
+ const bool dmm=mode==0||mode==3||simpleMode;
  const bool lowLevelMode=mode==2;
- const bool combinedMode=mode==3;
- const bool compressor=*parameters.getRawParameterValue("compress")>.5f;
- const bool expander=*parameters.getRawParameterValue("expand")>.5f;
- const bool bandwidth=*parameters.getRawParameterValue("bandwidth")>.5f;
- const bool liftHighOnly=(lowLevelMode||combinedMode)&&*parameters.getRawParameterValue("liftHighOnly")>.5f;
+ const bool combinedMode=mode==3||simpleMode;
+ const float simpleHigh=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("simpleHigh")*.01f);
+ // Simple mode uses one bounded HF shelf rather than stacking independent
+ // pre-emphasis, de-emphasis mismatch and sheen boosts.
+ const float emphasis=simpleMode?0.f:rawEmphasis;
+ const float sheen=simpleMode?0.f:rawSheen;
+ const float split=simpleMode?3500.f:rawSplit;
+ const bool compressor=simpleMode||*parameters.getRawParameterValue("compress")>.5f;
+ const bool expander=simpleMode||*parameters.getRawParameterValue("expand")>.5f;
+ const bool bandwidth=!simpleMode&&*parameters.getRawParameterValue("bandwidth")>.5f;
+ const bool liftHighOnly=simpleMode||((lowLevelMode||combinedMode)&&*parameters.getRawParameterValue("liftHighOnly")>.5f);
  // Shared decoder restoration control for all four compander models.
  // At 0% retain original decoding; at 100% suppress dynamic expansion.
  const float expansionScale=1.f-juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("expansionReduction")*.01f);
  const float liftSplitPole=pole(5000.f,sampleRate);
+ const float simpleHighPole=pole(3500.f+1500.f*simpleHigh,sampleRate);
+ const float simpleHighGain=db(15.f*simpleHigh);
  const float a1=pole(split*.48f,sampleRate),a2=pole(split*2.4f,sampleRate);
  // Analog-delay-style treble pre-emphasis before the compressor, with
  // mathematically complementary de-emphasis after the expander.
@@ -183,6 +193,12 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
     x=original;
    }
    if(liftHighOnly)x+=dryLow;
+   if(simpleMode){
+    // At zero the shelf is exact unity. At full it asymptotically
+    // approaches +15 dB above the selected transition frequency.
+    state.simpleHighLow=simpleHighPole*state.simpleHighLow+(1.f-simpleHighPole)*x;
+    x+= (simpleHighGain-1.f)*(x-state.simpleHighLow);
+   }
    if(bandwidth){state.highCut=cutoff*state.highCut+(1-cutoff)*x;x=state.highCut;}
    samples[i]=x*output;
   }
