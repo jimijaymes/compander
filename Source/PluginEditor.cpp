@@ -1,8 +1,8 @@
 #include "PluginEditor.h"
 namespace {const juce::Colour cream(0xfff3e8cf),gold(0xffd2ad72),cyan(0xff70c5cc);}
 CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),processor(p){
- const char* ids[]={"input","output","amount","emphasis","split","sheen"};
- const char* names[]={"INPUT","OUTPUT","COMPANDING AMOUNT","HF EMPHASIS","FREQUENCY SPLIT","SHEEN"};
+ const char* ids[]={"input","output","amount","emphasis","split","sheen","expansionReduction"};
+ const char* names[]={"INPUT","OUTPUT","COMPANDING AMOUNT","HF EMPHASIS","FREQUENCY SPLIT","SHEEN","REDUCE EXPANSION"};
  for(size_t i=0;i<knobs.size();++i){
   auto& k=knobs[i];k.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
   k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,95,21);
@@ -34,7 +34,8 @@ CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),
  compressor.setButtonText("COMPRESSOR ON");
  expander.setButtonText("EXPANDER ON");
  bandwidth.setButtonText("BBD BANDWIDTH");
- for(auto* b:{&compressor,&expander,&bandwidth}){
+ liftHighOnly.setButtonText("LIFT: 5 kHz+ ONLY");
+ for(auto* b:{&compressor,&expander,&bandwidth,&liftHighOnly}){
   b->setColour(juce::ToggleButton::textColourId,cream);
   b->setColour(juce::ToggleButton::tickColourId,cyan);
   addAndMakeVisible(*b);
@@ -42,7 +43,8 @@ CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),
  compressorAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"compress",compressor);
  expanderAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"expand",expander);
  bandwidthAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"bandwidth",bandwidth);
- setSize(900,430);
+ liftHighOnlyAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"liftHighOnly",liftHighOnly);
+ setSize(1020,495);
 }
 void CompanderEditor::paint(juce::Graphics& g){
  g.fillAll(juce::Colour(0xff1b2328));
@@ -55,13 +57,13 @@ void CompanderEditor::paint(juce::Graphics& g){
  g.drawText("COMPANDER  0.1",32,23,600,50,juce::Justification::centredLeft);
  g.setFont(juce::Font(juce::FontOptions(12)));
  g.drawText("ANALOG DELAY / NOISE REDUCTION CHARACTER",34,73,650,20,juce::Justification::centredLeft);
- g.setColour(gold);g.drawLine(32,104,868,104,2);
+ g.setColour(gold);g.drawLine(32,104,988,104,2);
  g.setColour(cream);g.setFont(juce::Font(juce::FontOptions(11)));
- g.drawText("DMM: FREQUENCY-SENSITIVE  |  DBX: BROADBAND  |  LIFT: QUIET SIGNALS UP / RESTORE DOWN",32,388,830,23,juce::Justification::centredLeft);
+ g.drawText("LIFT MODE: 5 kHz+ SPLIT (OPTIONAL)  |  REDUCE EXPANSION: 0% FULL RESTORE, 100% NO RESTORE",32,450,950,23,juce::Justification::centredLeft);
 }
 void CompanderEditor::resized(){
  for(size_t i=0;i<knobs.size();++i){
-  int x=28+(int)i*140;
+  int x=24+(int)i*140;
   knobs[i].slider.setBounds(x,123,125,122);
   knobs[i].label.setBounds(x-5,246,135,23);
  }
@@ -70,4 +72,5 @@ void CompanderEditor::resized(){
  compressor.setBounds(322,308,170,42);
  expander.setBounds(502,308,160,42);
  bandwidth.setBounds(678,308,175,42);
+ liftHighOnly.setBounds(330,375,245,42);
 }
