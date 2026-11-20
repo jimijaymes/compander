@@ -8,11 +8,11 @@ public:
 private:
  struct Knob{juce::Slider slider;juce::Label label;std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  CompanderProcessor& processor;
- std::array<Knob,6> knobs;
+ std::array<Knob,7> knobs;
  juce::ComboBox mode;
  juce::Label modeLabel;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
- juce::ToggleButton compressor,expander,bandwidth;
- std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> compressorAttachment,expanderAttachment,bandwidthAttachment;
+ juce::ToggleButton compressor,expander,bandwidth,liftHighOnly;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> compressorAttachment,expanderAttachment,bandwidthAttachment,liftHighOnlyAttachment;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompanderEditor)
 };
