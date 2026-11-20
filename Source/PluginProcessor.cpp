@@ -34,6 +34,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<B>(juce::ParameterID{"liftHighOnly",1},"Lift High Frequencies Only (5 kHz)",false));
  p.add(std::make_unique<F>(juce::ParameterID{"expansionReduction",1},"Reduce Expansion (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"simpleHigh",1},"High End (%)",juce::NormalisableRange<float>(0,100,.1f),0));
+ p.add(std::make_unique<B>(juce::ParameterID{"matchDeEmphasis",1},"Match De-emphasis to Pre-emphasis",false));
  return p;
 }
 CompanderProcessor::CompanderProcessor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),parameters(*this,nullptr,"STATE",layout()){}
@@ -77,7 +78,10 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float emphasisBoost=simpleMode?(4.62f*emphasis):juce::jlimit(0.f,2.f,emphasis);
  // Sheen reduces playback de-emphasis only, leaving record-side HF
  // pre-emphasis and its compression unchanged.
- const float deEmphasisBoost=emphasisBoost*(1.f-sheen);
+ // When matched, use the exact inverse coefficient of pre-emphasis;
+ // otherwise retain the original Sheen-controlled de-emphasis.
+ const bool matchDeEmphasis=*parameters.getRawParameterValue("matchDeEmphasis")>.5f;
+ const float deEmphasisBoost=matchDeEmphasis?emphasisBoost:emphasisBoost*(1.f-sheen);
  const float cutoff=pole(6800,sampleRate);
  // Detector must not follow individual waveform cycles; very short
  // time constants produce audible gain modulation on bass and midrange.
@@ -186,7 +190,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
    }
    // Exact inverse of y = x + k*(x - LP(x)), including filter state.
    // This returns the HF boost to unity when both sides are enabled.
-   if(expander && emphasisBoost>0.f){
+   if((expander||matchDeEmphasis) && deEmphasisBoost>0.f){
     const float previousLow=state.deEmphasisLow;
     const float original=(x+deEmphasisBoost*emphasisPole*previousLow)/
                          (1.f+deEmphasisBoost*emphasisPole);
