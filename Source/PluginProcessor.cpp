@@ -27,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<F>(juce::ParameterID{"emphasis",1},"HF Emphasis (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"sheen",1},"Sheen (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"split",1},"Frequency Split (Hz)",juce::NormalisableRange<float>(250,5000,1,.4f),1300));
- p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband","Low-Level Lift / Restore"},0));
  p.add(std::make_unique<B>(juce::ParameterID{"compress",1},"Compressor On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"expand",1},"Expander On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"bandwidth",1},"BBD Bandwidth",false));
@@ -44,7 +44,9 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float emphasis=*parameters.getRawParameterValue("emphasis")*.01f;
  const float sheen=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("sheen")*.01f);
  const float split=*parameters.getRawParameterValue("split");
- const bool dmm=*parameters.getRawParameterValue("mode")<.5f;
+ const int mode=juce::jlimit(0,2,(int)*parameters.getRawParameterValue("mode"));
+ const bool dmm=mode==0;
+ const bool lowLevelMode=mode==2;
  const bool compressor=*parameters.getRawParameterValue("compress")>.5f;
  const bool expander=*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=*parameters.getRawParameterValue("bandwidth")>.5f;
@@ -65,6 +67,11 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  // HF emphasis adjusts the amount of frequency-selective companding,
  // but should not multiply it into several times the nominal ratio.
  const float weights[3]={dmm?.40f:1.0f,dmm?.65f:0.0f,dmm?.70f:0.0f};
+ // The third mode uses an upward compressor on quiet signals during
+ // encoding and its complementary downward expander during decoding.
+ // 100% = 2:1 below -24 dBFS, followed by 1:2 below that threshold.
+ const float lowThreshold=-24.f;
+ const float lowStrength=juce::jlimit(0.f,1.f,amount);
  for(int c=0;c<count;++c){
   auto& state=channels[(size_t)c];
   auto* samples=buffer.getWritePointer(c);
@@ -78,6 +85,21 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
     const int base=encode?0:2;
     float low1=s[(size_t)base].split=a1*s[(size_t)base].split+(1-a1)*value;
     float low2=s[(size_t)(base+1)].split=a2*s[(size_t)(base+1)].split+(1-a2)*value;
+    if(lowLevelMode){
+     auto& env=encode?s[0].envEncode:s[0].envDecode;
+     const float v=std::abs(value);
+     const float k=v>env?attack:release;
+     env=k*env+(1.f-k)*v;
+     const float level=juce::Decibels::gainToDecibels(juce::jmax(1e-6f,env),-120.f);
+     const float below=juce::jmin(0.f,level-lowThreshold);
+     // Encoder slope: 1 - 0.5*strength. Decoder inverse slope:
+     // 1/(1 - 0.5*strength). The decoder therefore attenuates the
+     // quiet signals that the encoder raised.
+     const float slope=1.f-.5f*lowStrength;
+     const float delta=encode?(-.5f*lowStrength*below):
+       ((1.f/slope-1.f)*below);
+     return value*db(juce::jlimit(-18.f,18.f,delta));
+    }
     if(!dmm){
      auto& env=encode?s[0].envEncode:s[0].envDecode;
      float v=std::abs(value),k=v>env?attack:release;
