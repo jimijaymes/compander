@@ -31,6 +31,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<B>(juce::ParameterID{"compress",1},"Compressor On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"expand",1},"Expander On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"bandwidth",1},"BBD Bandwidth",false));
+ p.add(std::make_unique<B>(juce::ParameterID{"liftHighOnly",1},"Lift High Frequencies Only (5 kHz)",false));
+ p.add(std::make_unique<F>(juce::ParameterID{"expansionReduction",1},"Reduce Expansion (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  return p;
 }
 CompanderProcessor::CompanderProcessor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),parameters(*this,nullptr,"STATE",layout()){}
@@ -50,6 +52,9 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const bool compressor=*parameters.getRawParameterValue("compress")>.5f;
  const bool expander=*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=*parameters.getRawParameterValue("bandwidth")>.5f;
+ const bool liftHighOnly=lowLevelMode&&*parameters.getRawParameterValue("liftHighOnly")>.5f;
+ const float expansionScale=1.f-juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("expansionReduction")*.01f);
+ const float liftSplitPole=pole(5000.f,sampleRate);
  const float a1=pole(split*.48f,sampleRate),a2=pole(split*2.4f,sampleRate);
  // Analog-delay-style treble pre-emphasis before the compressor, with
  // mathematically complementary de-emphasis after the expander.
@@ -77,6 +82,14 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
   auto* samples=buffer.getWritePointer(c);
   for(int i=0;i<buffer.getNumSamples();++i){
    float x=samples[i]*input;
+   // Complementary crossover: dry low + processed high reconstructs
+   // the input exactly when processing is at unity gain.
+   float dryLow=0.f;
+   if(liftHighOnly){
+    state.liftLow=liftSplitPole*state.liftLow+(1.f-liftSplitPole)*x;
+    dryLow=state.liftLow;
+    x-=dryLow;
+   }
    // Separate encode/decode crossover memories: avoid sharing filter history
    // across the compressor and expander sides.
    auto stage=[&](float value,bool encode){
@@ -97,7 +110,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
      // quiet signals that the encoder raised.
      const float slope=1.f-.5f*lowStrength;
      const float delta=encode?(-.5f*lowStrength*below):
-       ((1.f/slope-1.f)*below);
+       (expansionScale*(1.f/slope-1.f)*below);
      return value*db(juce::jlimit(-18.f,18.f,delta));
     }
     if(!dmm){
@@ -135,6 +148,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
     state.deEmphasisLow=emphasisPole*previousLow+(1.f-emphasisPole)*original;
     x=original;
    }
+   if(liftHighOnly)x+=dryLow;
    if(bandwidth){state.highCut=cutoff*state.highCut+(1-cutoff)*x;x=state.highCut;}
    samples[i]=x*output;
   }
