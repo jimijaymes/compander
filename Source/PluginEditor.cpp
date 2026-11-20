@@ -1,8 +1,8 @@
 #include "PluginEditor.h"
 namespace {const juce::Colour cream(0xfff3e8cf),gold(0xffd2ad72),cyan(0xff70c5cc);}
 CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),processor(p){
- const char* ids[]={"input","output","amount","emphasis","split"};
- const char* names[]={"INPUT","OUTPUT","COMPANDING AMOUNT","HF EMPHASIS","FREQUENCY SPLIT"};
+ const char* ids[]={"input","output","amount","emphasis","split","sheen"};
+ const char* names[]={"INPUT","OUTPUT","COMPANDING AMOUNT","HF EMPHASIS","FREQUENCY SPLIT","SHEEN"};
  for(size_t i=0;i<knobs.size();++i){
   auto& k=knobs[i];k.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
   k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,95,21);
@@ -60,9 +60,9 @@ void CompanderEditor::paint(juce::Graphics& g){
 }
 void CompanderEditor::resized(){
  for(size_t i=0;i<knobs.size();++i){
-  int x=28+(int)i*170;
-  knobs[i].slider.setBounds(x,123,150,122);
-  knobs[i].label.setBounds(x-5,246,160,23);
+  int x=28+(int)i*140;
+  knobs[i].slider.setBounds(x,123,125,122);
+  knobs[i].label.setBounds(x-5,246,135,23);
  }
  modeLabel.setBounds(35,294,235,22);
  mode.setBounds(41,319,246,30);
