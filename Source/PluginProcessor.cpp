@@ -23,6 +23,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  juce::AudioProcessorValueTreeState::ParameterLayout p;
  p.add(std::make_unique<F>(juce::ParameterID{"input",1},"Input (dB)",juce::NormalisableRange<float>(-24,24,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"output",1},"Output (dB)",juce::NormalisableRange<float>(-24,24,.1f),0));
+ p.add(std::make_unique<F>(juce::ParameterID{"mix",1},"Wet Mix (%)",juce::NormalisableRange<float>(0,100,.1f),100));
  p.add(std::make_unique<F>(juce::ParameterID{"amount",1},"Companding Amount (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"emphasis",1},"HF Emphasis (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"sheen",1},"Sheen (%)",juce::NormalisableRange<float>(0,100,.1f),0));
@@ -44,6 +45,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const int count=juce::jmin(2,buffer.getNumChannels());
  const float input=db(*parameters.getRawParameterValue("input"));
  const float output=db(*parameters.getRawParameterValue("output"));
+ const float mix=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("mix")*.01f);
  const float amount=*parameters.getRawParameterValue("amount")*.01f;
  const float rawEmphasis=*parameters.getRawParameterValue("emphasis")*.01f;
  const float rawSheen=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("sheen")*.01f);
@@ -102,6 +104,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
   auto& state=channels[(size_t)c];
   auto* samples=buffer.getWritePointer(c);
   for(int i=0;i<buffer.getNumSamples();++i){
+   const float originalDry=samples[i]*input;
    float x=samples[i]*input;
    // Complementary crossover: dry low + processed high reconstructs
    // the input exactly when processing is at unity gain.
@@ -202,7 +205,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
    }
    if(liftHighOnly)x+=dryLow;
    if(bandwidth){state.highCut=cutoff*state.highCut+(1-cutoff)*x;x=state.highCut;}
-   samples[i]=x*output;
+   samples[i]=(x*mix+originalDry*(1.f-mix))*output;
   }
  }
  for(int c=count;c<buffer.getNumChannels();++c)buffer.clear(c,0,buffer.getNumSamples());
