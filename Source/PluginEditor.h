@@ -8,7 +8,7 @@ public:
 private:
  struct Knob{juce::Slider slider;juce::Label label;std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  CompanderProcessor& processor;
- std::array<Knob,7> knobs;
+ std::array<Knob,8> knobs;
  Knob simpleHighKnob;
  void updateModeVisibility();
  juce::ComboBox mode;
