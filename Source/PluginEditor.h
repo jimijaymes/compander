@@ -9,6 +9,8 @@ private:
  struct Knob{juce::Slider slider;juce::Label label;std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  CompanderProcessor& processor;
  std::array<Knob,7> knobs;
+ Knob simpleHighKnob;
+ void updateModeVisibility();
  juce::ComboBox mode;
  juce::Label modeLabel;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
