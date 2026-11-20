@@ -21,6 +21,7 @@ CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),
  }
  mode.addItem("DMM / FREQUENCY-SENSITIVE",1);
  mode.addItem("DBX / BROADBAND",2);
+ mode.addItem("LOW-LEVEL LIFT / RESTORE",3);
  mode.setColour(juce::ComboBox::backgroundColourId,juce::Colour(0xff303941));
  mode.setColour(juce::ComboBox::textColourId,cream);
  mode.setColour(juce::ComboBox::outlineColourId,gold);
@@ -56,7 +57,7 @@ void CompanderEditor::paint(juce::Graphics& g){
  g.drawText("ANALOG DELAY / NOISE REDUCTION CHARACTER",34,73,650,20,juce::Justification::centredLeft);
  g.setColour(gold);g.drawLine(32,104,868,104,2);
  g.setColour(cream);g.setFont(juce::Font(juce::FontOptions(11)));
- g.drawText("DMM: FREQUENCY-WEIGHTED 3-BAND COMPANDING   |   DBX: BROADBAND 2:1 / 1:2",32,388,830,23,juce::Justification::centredLeft);
+ g.drawText("DMM: FREQUENCY-SENSITIVE  |  DBX: BROADBAND  |  LIFT: QUIET SIGNALS UP / RESTORE DOWN",32,388,830,23,juce::Justification::centredLeft);
 }
 void CompanderEditor::resized(){
  for(size_t i=0;i<knobs.size();++i){
