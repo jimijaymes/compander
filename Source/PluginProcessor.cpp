@@ -25,6 +25,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<F>(juce::ParameterID{"output",1},"Output (dB)",juce::NormalisableRange<float>(-24,24,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"amount",1},"Companding Amount (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"emphasis",1},"HF Emphasis (%)",juce::NormalisableRange<float>(0,200,.1f),50));
+ p.add(std::make_unique<F>(juce::ParameterID{"sheen",1},"Sheen (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"split",1},"Frequency Split (Hz)",juce::NormalisableRange<float>(250,5000,1,.4f),1300));
  p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband"},0));
  p.add(std::make_unique<B>(juce::ParameterID{"compress",1},"Compressor On",true));
@@ -41,6 +42,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float output=db(*parameters.getRawParameterValue("output"));
  const float amount=*parameters.getRawParameterValue("amount")*.01f;
  const float emphasis=*parameters.getRawParameterValue("emphasis")*.01f;
+ const float sheen=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("sheen")*.01f);
  const float split=*parameters.getRawParameterValue("split");
  const bool dmm=*parameters.getRawParameterValue("mode")<.5f;
  const bool compressor=*parameters.getRawParameterValue("compress")>.5f;
@@ -52,6 +54,9 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  // Works in both DMM and broadband/dbx-style modes.
  const float emphasisPole=pole(split,sampleRate);
  const float emphasisBoost=juce::jlimit(0.f,2.f,emphasis)*1.0f;
+ // Sheen reduces playback de-emphasis only, leaving record-side HF
+ // pre-emphasis and its compression unchanged.
+ const float deEmphasisBoost=emphasisBoost*(1.f-sheen);
  const float cutoff=pole(6800,sampleRate);
  // Detector must not follow individual waveform cycles; very short
  // time constants produce audible gain modulation on bass and midrange.
@@ -103,8 +108,8 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
    // This returns the HF boost to unity when both sides are enabled.
    if(expander && emphasisBoost>0.f){
     const float previousLow=state.deEmphasisLow;
-    const float original=(x+emphasisBoost*emphasisPole*previousLow)/
-                         (1.f+emphasisBoost*emphasisPole);
+    const float original=(x+deEmphasisBoost*emphasisPole*previousLow)/
+                         (1.f+deEmphasisBoost*emphasisPole);
     state.deEmphasisLow=emphasisPole*previousLow+(1.f-emphasisPole)*original;
     x=original;
    }
