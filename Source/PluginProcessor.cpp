@@ -53,11 +53,14 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const bool lowLevelMode=mode==2;
  const bool combinedMode=mode==3||simpleMode;
  const float simpleHigh=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("simpleHigh")*.01f);
- // Simple mode uses one bounded HF shelf rather than stacking independent
- // pre-emphasis, de-emphasis mismatch and sheen boosts.
- const float emphasis=simpleMode?0.f:rawEmphasis;
- const float sheen=simpleMode?0.f:rawSheen;
- const float split=simpleMode?3500.f:rawSplit;
+ // Simple High End controls the existing compander pre-emphasis,
+ // incomplete de-emphasis (Sheen), and HF corner together.
+ // At zero, pre-emphasis is unity. At full, the maximum static
+ // pre/de-emphasis mismatch is 20*log10(1+4.62) ~= +15 dB.
+ // This is NOT a separate post-processing EQ shelf.
+ const float emphasis=simpleMode?simpleHigh:rawEmphasis;
+ const float sheen=simpleMode?simpleHigh:rawSheen;
+ const float split=simpleMode?(3500.f+1500.f*simpleHigh):rawSplit;
  const bool compressor=simpleMode||*parameters.getRawParameterValue("compress")>.5f;
  const bool expander=simpleMode||*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=!simpleMode&&*parameters.getRawParameterValue("bandwidth")>.5f;
@@ -66,14 +69,12 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  // At 0% retain original decoding; at 100% suppress dynamic expansion.
  const float expansionScale=1.f-juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("expansionReduction")*.01f);
  const float liftSplitPole=pole(5000.f,sampleRate);
- const float simpleHighPole=pole(3500.f+1500.f*simpleHigh,sampleRate);
- const float simpleHighGain=db(15.f*simpleHigh);
  const float a1=pole(split*.48f,sampleRate),a2=pole(split*2.4f,sampleRate);
  // Analog-delay-style treble pre-emphasis before the compressor, with
  // mathematically complementary de-emphasis after the expander.
  // Works in both DMM and broadband/dbx-style modes.
  const float emphasisPole=pole(split,sampleRate);
- const float emphasisBoost=juce::jlimit(0.f,2.f,emphasis)*1.0f;
+ const float emphasisBoost=simpleMode?(4.62f*emphasis):juce::jlimit(0.f,2.f,emphasis);
  // Sheen reduces playback de-emphasis only, leaving record-side HF
  // pre-emphasis and its compression unchanged.
  const float deEmphasisBoost=emphasisBoost*(1.f-sheen);
@@ -193,12 +194,6 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
     x=original;
    }
    if(liftHighOnly)x+=dryLow;
-   if(simpleMode){
-    // At zero the shelf is exact unity. At full it asymptotically
-    // approaches +15 dB above the selected transition frequency.
-    state.simpleHighLow=simpleHighPole*state.simpleHighLow+(1.f-simpleHighPole)*x;
-    x+= (simpleHighGain-1.f)*(x-state.simpleHighLow);
-   }
    if(bandwidth){state.highCut=cutoff*state.highCut+(1-cutoff)*x;x=state.highCut;}
    samples[i]=x*output;
   }
