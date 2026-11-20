@@ -12,7 +12,9 @@ float gainCurve(float envelope,float strength,bool expansion){
  // Bound gain changes to realistic working ranges. In particular,
  // very quiet bands must never receive tens of dB of instantaneous boost.
  const float difference=juce::jlimit(-24.0f,18.0f,level+18.0f);
- const float target=(expansion?0.5f:-0.5f)*strength*difference;
+ // A 2:1 encoder needs a 1:2 decoder: expander slope is +1,
+ // not +0.5. This was a major source of tracking error.
+ const float target=(expansion?1.0f:-0.5f)*strength*difference;
  return db(juce::jlimit(-12.0f,12.0f,target));
 }
 }
@@ -45,6 +47,11 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const bool expander=*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=*parameters.getRawParameterValue("bandwidth")>.5f;
  const float a1=pole(split*.48f,sampleRate),a2=pole(split*2.4f,sampleRate);
+ // Analog-delay-style treble pre-emphasis before the compressor, with
+ // mathematically complementary de-emphasis after the expander.
+ // Works in both DMM and broadband/dbx-style modes.
+ const float emphasisPole=pole(split,sampleRate);
+ const float emphasisBoost=juce::jlimit(0.f,2.f,emphasis)*1.0f;
  const float cutoff=pole(6800,sampleRate);
  // Detector must not follow individual waveform cycles; very short
  // time constants produce audible gain modulation on bass and midrange.
@@ -52,7 +59,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float release=coeff(dmm?.180f:.160f,sampleRate);
  // HF emphasis adjusts the amount of frequency-selective companding,
  // but should not multiply it into several times the nominal ratio.
- const float weights[3]={dmm?.40f:1.0f,dmm?.65f:0.0f,dmm?(0.55f+emphasis*.35f):0.0f};
+ const float weights[3]={dmm?.40f:1.0f,dmm?.65f:0.0f,dmm?.70f:0.0f};
  for(int c=0;c<count;++c){
   auto& state=channels[(size_t)c];
   auto* samples=buffer.getWritePointer(c);
@@ -84,8 +91,23 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
     }
     return result;
    };
+   // Pre-emphasis is applied on the record/encode side. Use a
+   // single-pole shelving boost, rather than permanent HF gain.
+   if(compressor && emphasisBoost>0.f){
+    state.preEmphasisLow=emphasisPole*state.preEmphasisLow+(1.f-emphasisPole)*x;
+    x+=emphasisBoost*(x-state.preEmphasisLow);
+   }
    x=stage(x,true);
    x=stage(x,false);
+   // Exact inverse of y = x + k*(x - LP(x)), including filter state.
+   // This returns the HF boost to unity when both sides are enabled.
+   if(expander && emphasisBoost>0.f){
+    const float previousLow=state.deEmphasisLow;
+    const float original=(x+emphasisBoost*emphasisPole*previousLow)/
+                         (1.f+emphasisBoost*emphasisPole);
+    state.deEmphasisLow=emphasisPole*previousLow+(1.f-emphasisPole)*original;
+    x=original;
+   }
    if(bandwidth){state.highCut=cutoff*state.highCut+(1-cutoff)*x;x=state.highCut;}
    samples[i]=x*output;
   }
