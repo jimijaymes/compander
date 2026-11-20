@@ -78,10 +78,13 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float emphasisBoost=simpleMode?(4.62f*emphasis):juce::jlimit(0.f,2.f,emphasis);
  // Sheen reduces playback de-emphasis only, leaving record-side HF
  // pre-emphasis and its compression unchanged.
- // When matched, use the exact inverse coefficient of pre-emphasis;
- // otherwise retain the original Sheen-controlled de-emphasis.
+ // Match enables the de-emphasis stage independently of the expander;
+ // Sheen still controls how much of that matching inverse is retained.
  const bool matchDeEmphasis=*parameters.getRawParameterValue("matchDeEmphasis")>.5f;
- const float deEmphasisBoost=matchDeEmphasis?emphasisBoost:emphasisBoost*(1.f-sheen);
+ // Matching sets the baseline inverse response; Sheen always reduces
+ // that inverse amount, including when Match De-emphasis is enabled.
+ // Thus Sheen=0 gives full matched de-emphasis, Sheen=100 gives none.
+ const float deEmphasisBoost=emphasisBoost*(1.f-sheen);
  const float cutoff=pole(6800,sampleRate);
  // Detector must not follow individual waveform cycles; very short
  // time constants produce audible gain modulation on bass and midrange.
