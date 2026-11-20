@@ -60,7 +60,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  // This is NOT a separate post-processing EQ shelf.
  const float emphasis=simpleMode?simpleHigh:rawEmphasis;
  const float sheen=simpleMode?simpleHigh:rawSheen;
- const float split=simpleMode?(3500.f+1500.f*simpleHigh):rawSplit;
+ const float split=simpleMode?5000.f:rawSplit;
  const bool compressor=simpleMode||*parameters.getRawParameterValue("compress")>.5f;
  const bool expander=simpleMode||*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=!simpleMode&&*parameters.getRawParameterValue("bandwidth")>.5f;
