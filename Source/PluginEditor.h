@@ -14,7 +14,7 @@ private:
  juce::ComboBox mode;
  juce::Label modeLabel;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
- juce::ToggleButton compressor,expander,bandwidth,liftHighOnly;
- std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> compressorAttachment,expanderAttachment,bandwidthAttachment,liftHighOnlyAttachment;
+ juce::ToggleButton compressor,expander,bandwidth,liftHighOnly,matchDeEmphasis;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> compressorAttachment,expanderAttachment,bandwidthAttachment,liftHighOnlyAttachment,matchDeEmphasisAttachment;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompanderEditor)
 };
