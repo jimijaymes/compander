@@ -1,8 +1,8 @@
 #include "PluginEditor.h"
 namespace {const juce::Colour cream(0xfff3e8cf),gold(0xffd2ad72),cyan(0xff70c5cc);}
 CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),processor(p){
- const char* ids[]={"input","output","amount","emphasis","split","sheen","expansionReduction"};
- const char* names[]={"INPUT","OUTPUT","COMPANDING AMOUNT","HF EMPHASIS","FREQUENCY SPLIT","SHEEN","REDUCE EXPANSION"};
+ const char* ids[]={"input","output","amount","emphasis","split","sheen","expansionReduction","mix"};
+ const char* names[]={"INPUT","OUTPUT","COMPANDING AMOUNT","HF EMPHASIS","FREQUENCY SPLIT","SHEEN","REDUCE EXPANSION","MIX"};
  for(size_t i=0;i<knobs.size();++i){
   auto& k=knobs[i];k.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
   k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,95,21);
@@ -84,7 +84,7 @@ void CompanderEditor::paint(juce::Graphics& g){
 void CompanderEditor::updateModeVisibility(){
  const bool simple=mode.getSelectedId()==5;
  for(size_t i=0;i<knobs.size();++i){
-  const bool visible=!simple||i==2||i==6;
+  const bool visible=!simple||i==2||i==6||i==7;
   knobs[i].slider.setVisible(visible);
   knobs[i].label.setVisible(visible);
  }
@@ -96,12 +96,12 @@ void CompanderEditor::updateModeVisibility(){
 }
 void CompanderEditor::resized(){
  for(size_t i=0;i<knobs.size();++i){
-  int x=mode.getSelectedId()==5?(i==2?250:520):24+(int)i*140;
+  int x=mode.getSelectedId()==5?(i==2?180:(i==6?400:620)):24+(int)i*120;
   knobs[i].slider.setBounds(x,123,125,122);
   knobs[i].label.setBounds(x-5,246,135,23);
  }
- simpleHighKnob.slider.setBounds(790,123,125,122);
- simpleHighKnob.label.setBounds(785,246,135,23);
+ simpleHighKnob.slider.setBounds(825,123,125,122);
+ simpleHighKnob.label.setBounds(820,246,135,23);
  modeLabel.setBounds(35,294,235,22);
  mode.setBounds(41,319,246,30);
  compressor.setBounds(322,308,170,42);
