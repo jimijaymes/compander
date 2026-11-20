@@ -25,7 +25,7 @@ public:
 private:
  static juce::AudioProcessorValueTreeState::ParameterLayout layout();
  struct Band{float split=0,envEncode=0,envDecode=0;};
- struct Channel{std::array<Band,4> bands;float highCut=0,preEmphasisLow=0,deEmphasisLow=0,liftLow=0;};
+ struct Channel{std::array<Band,4> bands;float highCut=0,preEmphasisLow=0,deEmphasisLow=0,liftLow=0,liftEnvEncode=0,liftEnvDecode=0;};
  std::array<Channel,2> channels{};
  double sampleRate=44100.0;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompanderProcessor)
