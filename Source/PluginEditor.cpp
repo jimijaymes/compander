@@ -77,7 +77,7 @@ void CompanderEditor::paint(juce::Graphics& g){
  g.drawText("ANALOG DELAY / NOISE REDUCTION CHARACTER",34,73,650,20,juce::Justification::centredLeft);
  g.setColour(gold);g.drawLine(32,104,988,104,2);
  g.setColour(cream);g.setFont(juce::Font(juce::FontOptions(11)));
- g.drawText(mode.getSelectedId()==5?"SIMPLE: DMM + 5 kHz LIFT  |  HIGH END: 0 TO +15 dB SHELF":"LIFT / HYBRID: OPTIONAL 5 kHz+ LIFT  |  REDUCE EXPANSION: 0% FULL RESTORE, 100% NO RESTORE",32,450,950,23,juce::Justification::centredLeft);
+ g.drawText(mode.getSelectedId()==5?"SIMPLE: HF PRE-EMPHASIS + SHEEN  |  MAX STATIC HF LIFT ~15 dB":"LIFT / HYBRID: OPTIONAL 5 kHz+ LIFT  |  REDUCE EXPANSION: 0% FULL RESTORE, 100% NO RESTORE",32,450,950,23,juce::Justification::centredLeft);
 }
 void CompanderEditor::updateModeVisibility(){
  const bool simple=mode.getSelectedId()==5;
