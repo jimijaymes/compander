@@ -37,7 +37,8 @@ CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),
  expander.setButtonText("EXPANDER ON");
  bandwidth.setButtonText("BBD BANDWIDTH");
  liftHighOnly.setButtonText("LIFT: 5 kHz+ ONLY");
- for(auto* b:{&compressor,&expander,&bandwidth,&liftHighOnly}){
+ matchDeEmphasis.setButtonText("MATCH DE-EMPHASIS");
+ for(auto* b:{&compressor,&expander,&bandwidth,&liftHighOnly,&matchDeEmphasis}){
   b->setColour(juce::ToggleButton::textColourId,cream);
   b->setColour(juce::ToggleButton::tickColourId,cyan);
   addAndMakeVisible(*b);
@@ -46,6 +47,7 @@ CompanderEditor::CompanderEditor(CompanderProcessor& p):AudioProcessorEditor(p),
  expanderAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"expand",expander);
  bandwidthAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"bandwidth",bandwidth);
  liftHighOnlyAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"liftHighOnly",liftHighOnly);
+ matchDeEmphasisAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"matchDeEmphasis",matchDeEmphasis);
  simpleHighKnob.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
  simpleHighKnob.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,95,21);
  simpleHighKnob.slider.setColour(juce::Slider::rotarySliderFillColourId,cyan);
@@ -89,6 +91,7 @@ void CompanderEditor::updateModeVisibility(){
  simpleHighKnob.slider.setVisible(simple);
  simpleHighKnob.label.setVisible(simple);
  for(auto* b:{&compressor,&expander,&bandwidth,&liftHighOnly})b->setVisible(!simple);
+ matchDeEmphasis.setVisible(true);
  repaint();
 }
 void CompanderEditor::resized(){
@@ -105,4 +108,5 @@ void CompanderEditor::resized(){
  expander.setBounds(502,308,160,42);
  bandwidth.setBounds(678,308,175,42);
  liftHighOnly.setBounds(330,375,245,42);
+ matchDeEmphasis.setBounds(600,375,250,42);
 }
