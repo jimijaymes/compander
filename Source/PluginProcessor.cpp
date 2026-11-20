@@ -27,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<F>(juce::ParameterID{"emphasis",1},"HF Emphasis (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"sheen",1},"Sheen (%)",juce::NormalisableRange<float>(0,100,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"split",1},"Frequency Split (Hz)",juce::NormalisableRange<float>(250,5000,1,.4f),1300));
- p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband","Low-Level Lift / Restore"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"mode",1},"Compander Model",juce::StringArray{"DMM Frequency-Sensitive","dbx-Style Broadband","Low-Level Lift / Restore","DMM + Low-Level Lift"},0));
  p.add(std::make_unique<B>(juce::ParameterID{"compress",1},"Compressor On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"expand",1},"Expander On",true));
  p.add(std::make_unique<B>(juce::ParameterID{"bandwidth",1},"BBD Bandwidth",false));
@@ -46,13 +46,14 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float emphasis=*parameters.getRawParameterValue("emphasis")*.01f;
  const float sheen=juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("sheen")*.01f);
  const float split=*parameters.getRawParameterValue("split");
- const int mode=juce::jlimit(0,2,(int)*parameters.getRawParameterValue("mode"));
- const bool dmm=mode==0;
+ const int mode=juce::jlimit(0,3,(int)*parameters.getRawParameterValue("mode"));
+ const bool dmm=mode==0||mode==3;
  const bool lowLevelMode=mode==2;
+ const bool combinedMode=mode==3;
  const bool compressor=*parameters.getRawParameterValue("compress")>.5f;
  const bool expander=*parameters.getRawParameterValue("expand")>.5f;
  const bool bandwidth=*parameters.getRawParameterValue("bandwidth")>.5f;
- const bool liftHighOnly=lowLevelMode&&*parameters.getRawParameterValue("liftHighOnly")>.5f;
+ const bool liftHighOnly=(lowLevelMode||combinedMode)&&*parameters.getRawParameterValue("liftHighOnly")>.5f;
  const float expansionScale=1.f-juce::jlimit(0.f,1.f,*parameters.getRawParameterValue("expansionReduction")*.01f);
  const float liftSplitPole=pole(5000.f,sampleRate);
  const float a1=pole(split*.48f,sampleRate),a2=pole(split*2.4f,sampleRate);
@@ -85,7 +86,7 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
    // Complementary crossover: dry low + processed high reconstructs
    // the input exactly when processing is at unity gain.
    float dryLow=0.f;
-   if(liftHighOnly){
+   if(liftHighOnly&&!combinedMode){
     state.liftLow=liftSplitPole*state.liftLow+(1.f-liftSplitPole)*x;
     dryLow=state.liftLow;
     x-=dryLow;
@@ -137,8 +138,39 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
     state.preEmphasisLow=emphasisPole*state.preEmphasisLow+(1.f-emphasisPole)*x;
     x+=emphasisBoost*(x-state.preEmphasisLow);
    }
-   x=stage(x,true);
-   x=stage(x,false);
+   // Hybrid: DMM three-band companding across the whole signal, plus
+   // an independent low-level lift/restore pair. Its optional 5 kHz+
+   // crossover affects only the lift branch, not the DMM processing.
+   auto liftStage=[&](float value,bool encode){
+    if((encode&&!compressor)||(!encode&&!expander))return value;
+    auto& env=encode?state.liftEnvEncode:state.liftEnvDecode;
+    const float v=std::abs(value);
+    const float k=v>env?attack:release;
+    env=k*env+(1.f-k)*v;
+    const float level=juce::Decibels::gainToDecibels(juce::jmax(1e-6f,env),-120.f);
+    const float below=juce::jmin(0.f,level-lowThreshold);
+    const float slope=1.f-.5f*lowStrength;
+    const float delta=encode?(-.5f*lowStrength*below):
+      (expansionScale*(1.f/slope-1.f)*below);
+    return value*db(juce::jlimit(-18.f,18.f,delta));
+   };
+   if(combinedMode){
+    // Encode in series, then decode in reverse order.
+    x=stage(x,true);
+    float hybridLow=0.f;
+    if(liftHighOnly){
+     state.liftLow=liftSplitPole*state.liftLow+(1.f-liftSplitPole)*x;
+     hybridLow=state.liftLow;
+     x-=hybridLow;
+    }
+    x=liftStage(x,true);
+    x=liftStage(x,false);
+    if(liftHighOnly)x+=hybridLow;
+    x=stage(x,false);
+   }else{
+    x=stage(x,true);
+    x=stage(x,false);
+   }
    // Exact inverse of y = x + k*(x - LP(x)), including filter state.
    // This returns the HF boost to unity when both sides are enabled.
    if(expander && emphasisBoost>0.f){
