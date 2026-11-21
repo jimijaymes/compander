@@ -10,6 +10,7 @@ private:
  CompanderProcessor& processor;
  std::array<Knob,8> knobs;
  Knob simpleHighKnob;
+ Knob attackKnob,releaseKnob,simpleSpeedKnob;
  void updateModeVisibility();
  juce::ComboBox mode;
  juce::Label modeLabel;
