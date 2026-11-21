@@ -24,6 +24,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompanderProcessor::layout()
  p.add(std::make_unique<F>(juce::ParameterID{"input",1},"Input (dB)",juce::NormalisableRange<float>(-24,24,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"output",1},"Output (dB)",juce::NormalisableRange<float>(-24,24,.1f),0));
  p.add(std::make_unique<F>(juce::ParameterID{"mix",1},"Wet Mix (%)",juce::NormalisableRange<float>(0,100,.1f),100));
+ p.add(std::make_unique<F>(juce::ParameterID{"attackTime",1},"Attack Speed (%)",juce::NormalisableRange<float>(0,100,.1f),50));
+ p.add(std::make_unique<F>(juce::ParameterID{"releaseTime",1},"Release Speed (%)",juce::NormalisableRange<float>(0,100,.1f),50));
+ p.add(std::make_unique<F>(juce::ParameterID{"simpleSpeed",1},"Simple Speed (Fast to Slow)",juce::NormalisableRange<float>(0,100,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"amount",1},"Companding Amount (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"emphasis",1},"HF Emphasis (%)",juce::NormalisableRange<float>(0,200,.1f),50));
  p.add(std::make_unique<F>(juce::ParameterID{"sheen",1},"Sheen (%)",juce::NormalisableRange<float>(0,100,.1f),0));
@@ -90,8 +93,14 @@ void CompanderProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::Mid
  const float cutoff=pole(6800,sampleRate);
  // Detector must not follow individual waveform cycles; very short
  // time constants produce audible gain modulation on bass and midrange.
- const float attack=coeff(dmm?.012f:.010f,sampleRate);
- const float release=coeff(dmm?.180f:.160f,sampleRate);
+ // At 50% each mode uses its original timing; each side spans 0.25x to 4x.
+ // Simple mode uses one shared speed control for both attack and release.
+ const float attackPosition=*parameters.getRawParameterValue(simpleMode?"simpleSpeed":"attackTime");
+ const float releasePosition=*parameters.getRawParameterValue(simpleMode?"simpleSpeed":"releaseTime");
+ const float attackSeconds=(dmm?.012f:.010f)*std::pow(4.f,(attackPosition-50.f)/50.f);
+ const float releaseSeconds=(dmm?.180f:.160f)*std::pow(4.f,(releasePosition-50.f)/50.f);
+ const float attack=coeff(attackSeconds,sampleRate);
+ const float release=coeff(releaseSeconds,sampleRate);
  // HF emphasis adjusts the amount of frequency-selective companding,
  // but should not multiply it into several times the nominal ratio.
  const float weights[3]={dmm?.40f:1.0f,dmm?.65f:0.0f,dmm?.70f:0.0f};
